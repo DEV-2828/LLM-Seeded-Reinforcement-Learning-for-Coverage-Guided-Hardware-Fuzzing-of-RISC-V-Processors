@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Verilator build artifacts
+verilog_baseline/obj_dir/
+
+# Generated files
+coverage_plot.png
+
+# Setup script (not needed in repo)
+setup.sh
