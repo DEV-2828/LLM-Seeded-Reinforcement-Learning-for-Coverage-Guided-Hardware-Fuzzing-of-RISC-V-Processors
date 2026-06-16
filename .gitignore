@@ -4,10 +4,11 @@ __pycache__/
 *.pyc
 
 # Verilator build artifacts
-verilog_baseline/obj_dir/
+**/obj_dir/
+**/obj_dir_buggy/
 
 # Generated files
-coverage_plot.png
+*.png
 
-# Setup script (not needed in repo)
+# Setup script (superseded by requirements.txt)
 setup.sh
