@@ -1,6 +1,8 @@
 #include "Valu.h"
 #include <verilated.h>
 
+double sc_time_stamp() { return 0; }
+
 extern "C" {
     Valu* alu_init() {
         return new Valu();
