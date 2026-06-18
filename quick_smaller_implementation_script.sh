@@ -25,3 +25,8 @@ bash build_buggy.sh
 echo ""
 echo "=== Running Milestone 5: Differential Fuzzer ==="
 python3 differential_fuzzer.py
+
+# echo ""
+# echo "=== Running Current Limitations Demo ==="
+# cd "$SCRIPT_DIR"
+# python3 "$SCRIPT_DIR/smaller_implementation/demo_current_limitations.py"
