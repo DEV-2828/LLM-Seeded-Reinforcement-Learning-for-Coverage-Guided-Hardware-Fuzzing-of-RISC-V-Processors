@@ -59,18 +59,42 @@ To ensure smooth progress and easy debugging, we have divided the project into f
 
 ---
 
-## Proposed Changes for Milestone 1
+## Proposed Changes
 
-We will work primarily in the `initial_smaller_implementation/` directory locally.
+We will implement the components described in the `smaller_implementation_explanation.md` step-by-step. All files will be placed in the `smaller_implementation/` directory.
 
-#### [NEW] [env_mock.py](file:///c:/Devopam/Engineering_CSE/SEM-5/SEM5_VSC_CODING/GRIND/RL-FUZZING/initial_smaller_implementation/env_mock.py)
-Python-based mock ALU environment for Milestone 1.
+### Milestone 1: RL Agent & Mock Environment
 
-#### [NEW] [agent.py](file:///c:/Devopam/Engineering_CSE/SEM-5/SEM5_VSC_CODING/GRIND/RL-FUZZING/initial_smaller_implementation/agent.py)
-PyTorch Deep Q-Network implementation (Replay Buffer, Q-Network, Epsilon-greedy action selection).
+#### [NEW] [agent.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/agent.py)
+PyTorch Deep Q-Network implementation (Replay Buffer, Q-Network, Epsilon-greedy action selection) with state vector composed of instruction fields and coverage array, and 38 possible actions.
 
-#### [NEW] [train_mock.py](file:///c:/Devopam/Engineering_CSE/SEM-5/SEM5_VSC_CODING/GRIND/RL-FUZZING/initial_smaller_implementation/train_mock.py)
-The training loop for Milestone 1, connecting the PyTorch agent to the mock environment.
+#### [NEW] [mock_env/env_mock.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/mock_env/env_mock.py)
+Python-based mock ALU environment `MockALUEnv` for early testing.
+
+#### [NEW] [train_mock.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/train_mock.py)
+The training loop for Milestone 1, running the agent through the mock environment for 500 episodes to verify learning capability.
+
+### Milestone 2-4: Verilator Environment
+
+#### [NEW] [verilator_env/alu.v](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/alu.v)
+Clean Verilog implementation of a simple ALU.
+
+#### [NEW] [verilator_env/alu_buggy.v](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/alu_buggy.v)
+Verilog ALU with an intentionally injected bug in the AND operation.
+
+#### [NEW] [verilator_env/alu_wrapper.cpp](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/alu_wrapper.cpp)
+C++ wrapper exposing a simple C API to interact with the C++ model compiled by Verilator.
+
+#### [NEW] [verilator_env/env_verilator.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/env_verilator.py)
+Python script using `ctypes` to load the shared library and call the C API.
+
+#### [NEW] [golden_model.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/golden_model.py)
+Pure Python `golden_alu` function serving as the trusted source of truth.
+
+### Milestone 5: Differential Fuzzer
+
+#### [NEW] [differential_fuzzer.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/differential_fuzzer.py)
+The core fuzzing script combining the RL Agent, the Buggy Verilator hardware model, and the Golden Python Model to discover logic errors and generate unique bug signatures.
 
 ## Verification Plan (Milestone 1)
 1. **Convergence Check:** Run `train_mock.py`. The agent's coverage should reach 100% (all mock ALU branches visited) significantly faster than a purely random mutation baseline.
