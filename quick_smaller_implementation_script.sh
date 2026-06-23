@@ -10,12 +10,12 @@ source .venv/bin/activate
 
 echo ""
 echo "=== Running Milestone 1: Mock Environment ==="
-cd "$SCRIPT_DIR/smaller_implementation/mock_env"
+cd "$SCRIPT_DIR/proof_of_concept_smaller_implementation/mock_env"
 python3 train_mock.py
 
 echo ""
 echo "=== Building Milestone 2-3: Verilator Bridge ==="
-cd "$SCRIPT_DIR/smaller_implementation/verilator_env"
+cd "$SCRIPT_DIR/proof_of_concept_smaller_implementation/verilator_env"
 bash build_bridge.sh
 
 echo ""
@@ -29,4 +29,4 @@ python3 differential_fuzzer.py
 # echo ""
 # echo "=== Running Current Limitations Demo ==="
 # cd "$SCRIPT_DIR"
-# python3 "$SCRIPT_DIR/smaller_implementation/demo_current_limitations.py"
+# python3 "$SCRIPT_DIR/proof_of_concept_smaller_implementation/demo_current_limitations.py"
