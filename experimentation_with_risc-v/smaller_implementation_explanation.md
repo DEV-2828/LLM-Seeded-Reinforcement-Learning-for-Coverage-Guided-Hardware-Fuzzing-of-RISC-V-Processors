@@ -5,7 +5,7 @@ The `smaller_implementation` folder contains a miniature version of a Coverage-G
 The system is split into three main components:
 1. **The RL Agent**: A Deep Q-Network (DQN) that learns how to mutate instructions to hit new coverage paths.
 2. **The Mock Environment**: A pure Python simulated environment to quickly train/test the agent's ability to discover branches.
-3. **The Verilator Environment**: The actual hardware-in-the-loop environment where the agent feeds instructions to a compiled Verilog model of an ALU, extracts coverage, and compares its output against a Golden Model to find hardware bugs.
+3. **The Direct Verilog Environment**: The actual hardware-in-the-loop environment where the agent feeds instructions to a directly parsed Verilog model of an ALU, extracts coverage, and compares its output against a Golden Model to find hardware bugs.
 
 ---
 
@@ -46,19 +46,19 @@ The `train_mock.py` script runs the agent through this environment for 500 episo
 
 ---
 
-## 3. The Verilator Environment (`verilator_env`)
+## 3. The Direct Verilog Environment (`verilator_env`)
 
-Once the agent's logic is proven in the Mock environment, it moves to the Verilator Environment, which brings real hardware simulation into Python.
+Once the agent's logic is proven in the Mock environment, it moves to the Direct Verilog Environment, which brings real hardware semantics into Python without a generated C++ layer.
 
 ### The Hardware (`alu.v` & `alu_buggy.v`)
 - There are two Verilog implementations of a simple ALU. `alu.v` is clean, while `alu_buggy.v` contains an intentionally injected bug in the `AND` operation.
 - They take `inst`, `rs1_data`, and `rs2_data` as inputs and output `rd_data` and a 10-bit `coverage_bins` wire.
 - In `alu_buggy.v`, the AND logic incorrectly masks out the least significant bit: `rd_data <= (rs1_data & rs2_data) & 32'hFFFFFFFE;`.
 
-### The Bridge (`env_verilator.py` & `alu_wrapper.cpp`)
-- Verilator compiles the Verilog into C++ cycle-accurate models.
-- `alu_wrapper.cpp` exposes a simple C API (`alu_step`, `alu_get_rd`, `alu_get_coverage`) to interact with the C++ model.
-- `env_verilator.py` uses Python's `ctypes` library to load the resulting shared library (`libalu.so` or `libalu_buggy.so`) and call those C functions directly from Python.
+### The Runtime (`verilog_parser.py`, `verilog_runtime.py`, `env_verilator.py`)
+- `verilog_parser.py` turns the supported Verilog subset into a normalized IR.
+- `verilog_runtime.py` executes that IR directly in Python and records coverage.
+- `env_verilator.py` is the environment wrapper kept for continuity in the copied demo folder; it will become the thin API layer over the direct parser/runtime path.
 
 ### The Golden Model (`golden_model.py`)
 - This is a pure Python function `golden_alu(inst, rs1_data, rs2_data)` that calculates exactly what the ALU *should* output according to the RISC-V specification. It is the trusted source of truth.
@@ -67,17 +67,17 @@ Once the agent's logic is proven in the Mock environment, it moves to the Verila
 
 ## 4. The Differential Fuzzer (`differential_fuzzer.py`)
 
-This is where everything comes together in **Milestone 5**. The Differential Fuzzer uses the RL Agent, the Buggy Verilator hardware model, and the Golden Python Model.
+This is where everything comes together in **Milestone 5**. The Differential Fuzzer uses the RL Agent, the buggy direct-Verilog hardware model, and the Golden Python Model.
 
 ### The Flow of Execution:
-1. **Initialization**: The `DifferentialFuzzerEnv` loads the buggy Verilator shared library (`libalu_buggy.so`).
+1. **Initialization**: The `DifferentialFuzzerEnv` loads the buggy Verilog model through the local parser/runtime backend.
 2. **Instruction Generation**: The environment starts with a basic instruction (e.g., `ADD x0, x0, x0`).
 3. **Agent Action**: The DQN Agent looks at the state (instruction fields + current coverage) and outputs an action (e.g., "Randomize funct3").
 4. **Environment Step**: 
    - The environment mutates the `current_instruction` according to the agent's action.
    - It also completely randomizes the data operands (`rs1_data` and `rs2_data`) to ensure wide data coverage.
 5. **Differential Execution**:
-   - The mutated instruction and random operands are fed into the **Verilator Hardware ALU** via `self.hw_alu.step()`, yielding a `hw_result`.
+   - The mutated instruction and random operands are fed into the **direct Verilog ALU runtime** via `self.hw_alu.step()`, yielding a `hw_result`.
    - The *exact same* instruction and operands are fed into the **Python Golden Model** via `golden_alu()`, yielding a `golden_result`.
 6. **Coverage Extraction**: The coverage bits (`coverage_bins`) are pulled from the hardware model.
 7. **Reward & Bug Detection**:
@@ -88,3 +88,7 @@ This is where everything comes together in **Milestone 5**. The Differential Fuz
 9. **Learning**: The agent stores this transition in its replay buffer and updates its neural network to prioritize actions that led to new coverage or discovered bugs.
 
 By combining Reinforcement Learning (to intelligently navigate the instruction space towards deep coverage) with Differential Testing (comparing a hardware model against a software model), the system creates an automated, coverage-guided fuzzing loop capable of exposing deeply buried hardware logic errors.
+
+## 5. Future RISC-V Execution Path (`libriscv`)
+
+If and when the demo grows from single-ALU tests to actual RISC-V instruction streams, the best next execution backend is `libriscv` unless a stronger option emerges. It is a fast, embeddable ISA-level emulator with instruction stepping, sandboxing, and low-latency execution, which fits the future RISC-V workload better than Verilator-generated code. It does not replace the Verilog parser/runtime for the ALU demo; it complements it later for program-level execution.

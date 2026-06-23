@@ -62,7 +62,7 @@ class RLVerilatorEnv:
         elif action == 37:
             self.current_instruction = (self.current_instruction & ~(0x1F << 7)) | (np.random.randint(0, 32) << 7)
             
-        # Execute instruction in Verilator (with dummy rs1/rs2 data for now)
+        # Execute instruction in the direct Verilog runtime (with dummy rs1/rs2 data for now)
         self.alu.step(self.current_instruction, 0, 0)
         
         # Get coverage from Verilog simulation
@@ -80,7 +80,7 @@ class RLVerilatorEnv:
         return state, reward, done, {}
 
 def train_verilator():
-    print("Starting Training Loop with Real Verilator Environment...")
+    print("Starting Training Loop with Direct Verilog Environment...")
     env = RLVerilatorEnv()
     agent = DQNAgent(state_dim=env.state_dim, action_dim=env.action_space_n)
     

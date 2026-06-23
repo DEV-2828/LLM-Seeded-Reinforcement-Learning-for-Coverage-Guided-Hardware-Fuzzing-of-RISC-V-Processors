@@ -4,10 +4,15 @@ This plan outlines an expanded, step-by-step approach to building the RL-guided 
 
 We will use **PyTorch** for the reinforcement learning components to start, keeping the option to evaluate TensorFlow later if performance tuning dictates.
 
-## User Review Required
+This fork removes the Verilator-generated C++ layer from the small ALU demo. The hardware side will be parsed directly from Verilog into a small internal representation, and the RISC-V side will be handled separately as an ISA-level execution path when needed.
 
-> [!IMPORTANT]
-> Please review the expanded milestones. I have broken down the process into 7 detailed stages. If you approve of this roadmap, we will begin execution of **Milestone 1** immediately on your local system.
+## Decision Summary
+
+- Keep the work scoped to `experimentation_with_risc-v` for now.
+- Remove the Verilator-generated C++ layer only.
+- Use a direct Verilog parser plus a bit-accurate execution engine for the ALU demo.
+- Treat `libriscv` as an optional RISC-V ISA executor, not as a Verilog parser.
+- Prefer bit-accurate behavior for this project; cycle accuracy can be added later if timing or pipeline behavior becomes the target.
 
 ## Proposed Roadmap: Iterative Scaling
 
@@ -22,80 +27,91 @@ To ensure smooth progress and easy debugging, we have divided the project into f
 - **Reward:** +1 for discovering a new execution branch in the Python ALU.
 - **Outcome:** A working PyTorch RL loop that successfully maximizes coverage of a Python function faster than random fuzzing.
 
-### Milestone 2: Verilog Synthesis Baseline (Toolchain Verification)
-**Goal:** Verify that a simple Verilog model can be compiled into a C++ simulation locally or on Colab. No RL involved yet.
-- **Target:** A simple `alu.v` (Verilog) file representing a basic RISC-V ALU.
-- **Action:** Compile `alu.v` using Verilator into a C++ model (`Valu`).
-- **Outcome:** A C++ executable that can run the Verilog model and print simple outputs, proving the Verilator toolchain is functional.
+### Milestone 2: Direct Verilog Parsing Baseline
+**Goal:** Parse a simple Verilog model directly into an internal representation without generating C++.
+- **Target:** A simple `alu.v` file representing a basic RISC-V ALU.
+- **Action:** Build a Verilog front end that reads `alu.v` and produces an AST/IR for module structure, assignments, `always` blocks, and basic control flow.
+- **Outcome:** A parsed hardware model that can be inspected and executed without Verilator or any generated C++ source.
 
-### Milestone 3: The Python-to-C++ Bridge
-**Goal:** Establish a programmatic connection between our Python environment and the compiled C++ Verilator model.
-- **Action:** Use `pybind11` (or a lightweight `subprocess` wrapper if preferred) to allow Python to instantiate the C++ ALU, feed it a 32-bit instruction, step the clock, and read the output/coverage signals.
-- **Outcome:** A Python script that can directly drive the Verilog simulation cycle-by-cycle.
+### Milestone 3: Bit-Accurate Execution Engine
+**Goal:** Evaluate the parsed Verilog model directly from the IR.
+- **Action:** Implement a lightweight interpreter for the ALU subset we use in the demo, including combinational logic, synchronous state updates, and simple case/if logic.
+- **Accuracy target:** Bit-accurate for outputs and state updates. This is the right fit for the current project because we care about logical correctness and coverage, not exact timing behavior.
+- **Outcome:** A Python-accessible executor that can run the ALU model and return outputs plus coverage data.
 
-### Milestone 4: RL + Verilator Integration
-**Goal:** Connect the PyTorch DQN from Milestone 1 to the Verilator bridge from Milestone 3.
-- **Action:** Swap out the mock Python ALU for the real Verilator ALU.
-- **Reward:** Extract actual toggle coverage (which wires flipped) from the Verilator simulation as the reward signal.
-- **Outcome:** The RL agent successfully learns to maximize hardware toggle coverage in a real Verilog module.
+### Milestone 4: RL + Direct Verilog Integration
+**Goal:** Connect the PyTorch DQN from Milestone 1 to the direct Verilog execution engine from Milestone 3.
+- **Action:** Swap out the mock Python ALU for the parsed-directly Verilog ALU.
+- **Reward:** Extract branch/case/toggle-style coverage from the interpreter as the reward signal.
+- **Outcome:** The RL agent successfully learns to maximize coverage in the directly parsed Verilog model.
 
 ### Milestone 5: Differential Testing & Bug Hunting
 **Goal:** Implement the full fuzzing loop to actively find bugs.
 - **Golden Model:** A trusted Python function calculating the expected result of an ALU operation.
-- **The Loop:** RL agent generates instruction -> sends to Verilator `alu.v` -> sends to Golden Model -> cross-checks results.
-- **Bug Injection:** We will intentionally inject a subtle logic flaw into `alu.v` and prove the RL agent can generate the specific instruction to trigger it.
+- **The Loop:** RL agent generates instruction -> runs the direct Verilog model -> runs the Golden Model -> cross-checks results.
+- **Bug Injection:** We will intentionally inject a subtle logic flaw into `alu_buggy.v` and prove the RL agent can generate the specific instruction to trigger it.
 - **Outcome:** A functional differential fuzzing loop capable of logging genuine divergences.
 
-### Milestone 6: Cloud Migration & Parallel Scaling
-**Goal:** Shift the working codebase to Google Colab (Linux) to unlock more compute.
-- **Action:** Move the Milestone 5 codebase to Colab.
-- **Scaling:** Implement a basic multi-worker architecture. Have 2-4 parallel Verilator instances feeding experience to a central PyTorch DQN.
-- **Outcome:** Accelerated fuzzing throughput utilizing cloud resources.
+### Milestone 6: RISC-V ISA Execution Path
+**Goal:** Add an ISA-level execution path for cases where the test stimulus is a RISC-V program rather than a single ALU instruction.
+- **Action:** Use `libriscv` as the fast RISC-V emulator/backend for running instruction sequences and producing ISA-level state transitions.
+- **Why here:** `libriscv` is ideal for fast RISC-V emulation, sandboxing, and step-by-step instruction execution, but it is not a Verilog parser and does not replace the direct Verilog frontend.
+- **Outcome:** A separate RISC-V execution mode that can be used for future seed generation, golden execution, or higher-level fuzzing experiments.
 
-### Milestone 7: Advanced CPU Subsystem (Future)
-**Goal:** Fuzz a more complex piece of hardware than an ALU.
-- **Action:** Replace the ALU with a more complex Verilog model, such as a tiny pipelined core or a specific RISC-V subsystem (like PicoRV32's control unit).
-- **Metric:** Transition from basic toggle coverage to FSM (Finite State Machine) state coverage.
+### Milestone 7: Scaling and Future Hardware Targets
+**Goal:** Extend the working direct-parse pipeline beyond the toy ALU.
+- **Action:** Generalize the parser and interpreter to larger Verilog blocks, then add parallel workers once the single-process flow is stable.
+- **Metric:** Move from branch coverage in the ALU to FSM or signal-toggle coverage in larger hardware blocks.
 
 ---
 
 ## Proposed Changes
 
-We will implement the components described in the `smaller_implementation_explanation.md` step-by-step. All files will be placed in the `smaller_implementation/` directory.
+We will implement the components described in the `smaller_implementation_explanation.md` step-by-step. All files will be placed in the `experimentation_with_risc-v/` directory.
 
 ### Milestone 1: RL Agent & Mock Environment
 
-#### [NEW] [agent.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/agent.py)
+#### [NEW] [agent.py](agent.py)
 PyTorch Deep Q-Network implementation (Replay Buffer, Q-Network, Epsilon-greedy action selection) with state vector composed of instruction fields and coverage array, and 38 possible actions.
 
-#### [NEW] [mock_env/env_mock.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/mock_env/env_mock.py)
+#### [NEW] [mock_env/env_mock.py](mock_env/env_mock.py)
 Python-based mock ALU environment `MockALUEnv` for early testing.
 
-#### [NEW] [train_mock.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/train_mock.py)
+#### [NEW] [train_mock.py](mock_env/train_mock.py)
 The training loop for Milestone 1, running the agent through the mock environment for 500 episodes to verify learning capability.
 
-### Milestone 2-4: Verilator Environment
+### Milestone 2-4: Direct Verilog Environment
 
-#### [NEW] [verilator_env/alu.v](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/alu.v)
+#### [NEW] [verilator_env/alu.v](verilator_env/alu.v)
 Clean Verilog implementation of a simple ALU.
 
-#### [NEW] [verilator_env/alu_buggy.v](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/alu_buggy.v)
+#### [NEW] [verilator_env/alu_buggy.v](verilator_env/alu_buggy.v)
 Verilog ALU with an intentionally injected bug in the AND operation.
 
-#### [NEW] [verilator_env/alu_wrapper.cpp](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/alu_wrapper.cpp)
-C++ wrapper exposing a simple C API to interact with the C++ model compiled by Verilator.
+#### [NEW] [verilator_env/verilog_parser.py](experimentation_with_risc-v/verilator_env/verilog_parser.py)
+Verilog frontend that parses the small ALU subset into an AST/IR.
 
-#### [NEW] [verilator_env/env_verilator.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/verilator_env/env_verilator.py)
-Python script using `ctypes` to load the shared library and call the C API.
+#### [NEW] [verilator_env/verilog_runtime.py](experimentation_with_risc-v/verilator_env/verilog_runtime.py)
+Bit-accurate interpreter that executes the parsed ALU model directly in Python.
 
-#### [NEW] [golden_model.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/golden_model.py)
+#### [NEW] [verilator_env/env_verilator.py](experimentation_with_risc-v/verilator_env/env_verilator.py)
+Python environment wrapper around the direct Verilog parser/runtime.
+
+#### [NEW] [golden_model.py](verilator_env/golden_model.py)
 Pure Python `golden_alu` function serving as the trusted source of truth.
 
 ### Milestone 5: Differential Fuzzer
 
-#### [NEW] [differential_fuzzer.py](file:///home/dev/LLM-Seeded%20Reinforcement%20Learning%20for%20Coverage-Guided%20Hardware%20Fuzzing%20of%20RISC-V%20Processors/smaller_implementation/differential_fuzzer.py)
-The core fuzzing script combining the RL Agent, the Buggy Verilator hardware model, and the Golden Python Model to discover logic errors and generate unique bug signatures.
+#### [NEW] [differential_fuzzer.py](experimentation_with_risc-v/verilator_env/differential_fuzzer.py)
+The core fuzzing script combining the RL Agent, the directly parsed Verilog hardware model, and the Golden Python Model to discover logic errors and generate unique bug signatures.
 
-## Verification Plan (Milestone 1)
-1. **Convergence Check:** Run `train_mock.py`. The agent's coverage should reach 100% (all mock ALU branches visited) significantly faster than a purely random mutation baseline.
-2. **Metrics:** We will plot "Coverage vs. Steps" to visually confirm the RL agent is learning over time.
+### Milestone 6: RISC-V Execution Path
+
+#### [NEW] [riscv_env/](experimentation_with_risc-v/)
+Planned home for a future `libriscv`-backed ISA execution path for RISC-V programs, separate from the Verilog parser/runtime used by the ALU demo.
+
+## Verification Plan
+1. **Parser Sanity Check:** Parse `alu.v` and `alu_buggy.v` directly and confirm the AST/IR exposes the expected operations, branches, and signals.
+2. **Bit-Accuracy Check:** Compare direct-parser outputs against the current golden Python model over a small set of known ALU instructions and operands.
+3. **Coverage Check:** Run `train_mock.py` first, then the direct-parser environment, and compare coverage growth against random mutation.
+4. **Bug-Divergence Check:** Confirm `alu_buggy.v` produces at least one reproducible divergence from `golden_model.py`.

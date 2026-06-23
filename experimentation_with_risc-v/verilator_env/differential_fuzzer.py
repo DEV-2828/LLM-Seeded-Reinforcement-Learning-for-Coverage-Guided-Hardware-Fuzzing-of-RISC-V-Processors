@@ -1,51 +1,36 @@
-"""
-Milestone 5: Differential Fuzzer
+"""Milestone 5: Differential Fuzzer.
 
 RL agent generates instructions and feeds them to:
-  1. The Verilator hardware model (buggy ALU)
-  2. The Python golden reference model
+    1. The direct Verilog hardware model (buggy ALU)
+    2. The Python golden reference model
 
-When outputs diverge → BUG FOUND.
+When outputs diverge -> BUG FOUND.
 The agent is rewarded for both new coverage AND finding divergences.
 """
 
-import numpy as np
-import sys
+from __future__ import annotations
+
 import os
+import sys
 import time
+
+import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent import DQNAgent
 from golden_model import golden_alu
 from env_verilator import VerilatorALU
-import ctypes
 
 
 class BuggyVerilatorALU(VerilatorALU):
-    """Loads the buggy shared library instead of the clean one."""
     def __init__(self):
-        lib_path = os.path.join(os.path.dirname(__file__), 'obj_dir_buggy', 'libalu_buggy.so')
-        if not os.path.exists(lib_path):
-            raise FileNotFoundError(f"Cannot find {lib_path}. Run build_buggy.sh first.")
-        
-        self.lib = ctypes.CDLL(lib_path)
-        
-        self.lib.alu_init.restype = ctypes.c_void_p
-        self.lib.alu_delete.argtypes = [ctypes.c_void_p]
-        self.lib.alu_reset.argtypes = [ctypes.c_void_p]
-        self.lib.alu_step.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
-        self.lib.alu_get_rd.argtypes = [ctypes.c_void_p]
-        self.lib.alu_get_rd.restype = ctypes.c_uint32
-        self.lib.alu_get_coverage.argtypes = [ctypes.c_void_p]
-        self.lib.alu_get_coverage.restype = ctypes.c_uint32
-        
-        self.alu = self.lib.alu_init()
-        self.lib.alu_reset(self.alu)
+        source_path = os.path.join(os.path.dirname(__file__), 'alu_buggy.v')
+        super().__init__(source_path=source_path)
 
 
 class DifferentialFuzzerEnv:
     """
-    RL environment that uses the BUGGY Verilator ALU and cross-checks
+    RL environment that uses the BUGGY direct Verilog ALU and cross-checks
     every instruction against the golden Python model.
     """
     def __init__(self):
@@ -70,7 +55,7 @@ class DifferentialFuzzerEnv:
         self.rs1_data = np.random.randint(0, 2**32)
         self.rs2_data = np.random.randint(0, 2**32)
         
-        self.hw_alu.lib.alu_reset(self.hw_alu.alu)
+        self.hw_alu.reset()
         return self._get_state()
         
     def _get_state(self):
@@ -111,7 +96,7 @@ class DifferentialFuzzerEnv:
         self.rs2_data = np.random.randint(0, 2**32)
             
         # === DIFFERENTIAL TEST ===
-        # 1. Run through hardware (buggy Verilator)
+        # 1. Run through hardware (buggy direct Verilog runtime)
         hw_result = self.hw_alu.step(
             self.current_instruction, self.rs1_data, self.rs2_data
         )
@@ -164,7 +149,7 @@ class DifferentialFuzzerEnv:
 def run_differential_fuzzer():
     print("=" * 60)
     print("  MILESTONE 5: Differential Fuzzer")
-    print("  RL Agent + Buggy Verilator vs Golden Model")
+    print("  RL Agent + Buggy Direct Verilog vs Golden Model")
     print("=" * 60)
     
     env = DifferentialFuzzerEnv()
