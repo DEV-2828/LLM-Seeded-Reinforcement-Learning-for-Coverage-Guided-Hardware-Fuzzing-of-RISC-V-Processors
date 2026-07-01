@@ -12,3 +12,14 @@ __pycache__/
 
 # Setup script (superseded by requirements.txt)
 setup.sh
+
+# C++ Shared Libraries
+*.so
+
+# Simulation artifacts
+*.vvp
+*.vcd
+*.fst
+
+# External Repositories
+complete_implementation/picorv32/
